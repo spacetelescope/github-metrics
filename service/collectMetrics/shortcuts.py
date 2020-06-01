@@ -51,7 +51,7 @@ def mine_repo_attribute(org_name: str, repo_name: str, attribute: str, params: t
         if len(response.json()) == 0:
             return results
 
-        # sample the pull requests to see if we're repeatly pulling the same data
+        # Sample the pull requests to see if we're repeatly pulling the same data
         if attribute in ['tags']:
             if response.json()[0]['name'] in [item['name'] for item in results]:
                 return results
@@ -73,8 +73,13 @@ def mine_repo_attribute(org_name: str, repo_name: str, attribute: str, params: t
                             return results
 
                     except KeyError:
-                        import pdb; pdb.set_trace()
-                        pass
+                        try:
+                            if response.json()[0]['type'] == 'Anonymous':
+                                return results
+
+                        except KeyError:
+                            import pdb; pdb.set_trace()
+                            pass
 
         page = page + 1
         results.extend(response.json())
