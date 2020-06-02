@@ -40,7 +40,6 @@ https://github.com/spacetelescope/drizzle
 https://github.com/spacetelescope/tweakwcs
 https://github.com/spacetelescope/dat_pyinthesky
 https://github.com/spacetelescope/notebooks
-https://github.com/spacetelescope/jdaviz
 https://github.com/spacetelescope/jwst
 https://github.com/glue-viz/glue-jupyter
 https://github.com/glue-viz/glue
@@ -50,13 +49,13 @@ https://github.com/astropy/ccdproc
 https://github.com/astropy/astropy
 https://github.com/spacetelescope/jirahub
 https://github.com/spacetelescope/jwst_validation_notebooks
-
+https://github.com/spacetelescope/jdaviz
 https://github.com/spacetelescope/cubeviz
 https://github.com/spacetelescope/specviz
+https://github.com/spacetelescope/mosviz
 https://github.com/spacetelescope/acsql
 https://github.com/spacetelescope/verhawk
 https://github.com/spacetelescope/yaml-schema-standard
 https://github.com/spacetelescope/aXe_c_code
 https://github.com/spacetelescope/wfc3_dash
 https://github.com/spacetelescope/sprint_notebooks
-
