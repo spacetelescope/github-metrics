@@ -1,78 +1,79 @@
 <template>
 <div class="container">
-  <div id="container" class="columns">
-    <div class="column is-one-quarter">
-      <aside class="menu">
-        <p class="menu-label">
+  <section class="hero">
+    <!-- <h1 class="header"> Github Metrics </h1> -->
+    <div class="hero-body">
+      <div class="container has-text-left">
+        <h1 class="title">
           Github Metrics
-        </p>
-        <ul class="menu-list">
-          <li><a class="is-active">Dashboard</a></li>
-          <!-- <li><a>Customers</a></li> -->
-        </ul>
-        <!-- <p class="menu-label">
-          Administration
-        </p>
-        <ul class="menu-list">
-          <li><a>Team Settings</a></li>
-          <li>
-            <a class="is-active">Manage Your Team</a>
-            <ul>
-              <li><a>Members</a></li>
-              <li><a>Plugins</a></li>
-              <li><a>Add a member</a></li>
-            </ul>
-          </li>
-          <li><a>Invitations</a></li>
-          <li><a>Cloud Storage Environment Settings</a></li>
-          <li><a>Authentication</a></li>
-        </ul>
-        <p class="menu-label">
-          Transactions
-        </p>
-        <ul class="menu-list">
-          <li><a>Payments</a></li>
-          <li><a>Transfers</a></li>
-          <li><a>Balance</a></li>
-        </ul> -->
-      </aside>
+        </h1>
+        <h2 class="subtitle">
+          monitor opensource contributions
+        </h2>
+      </div>
     </div>
-    <div class="column is-three-quarters">
-        <header>
-          <ul class="list-align">
+  </section>
+  <section class="row">
+    <div id="container" class="columns">
+      <div class="column is-one-quarter">
+        <aside class="menu">
+          <p class="menu-label">
+          </p>
+          <ul class="menu-list has-text-left">
             <li>
-              If there hasn't been any github release or tag then the information is taken from the last commit to that repository
+              <router-link active-class="is-active" to="/dashboard"> Dashboard Overview </router-link>
             </li>
             <li>
-              The issues count includes PRs becuase the API doesn't separate them, the avg open issue time has been corrected for this.
+              <router-link active-class="is-active" to="/repo-list"> Repo List </router-link>
             </li>
             <li>
-              Top contributors are listed for maintenance reference, no relation to quality or size of commits
+              <router-link active-class="is-active" to="/builds"> Build List </router-link>
             </li>
             <li>
-              RTD-latest: guesses that the docs are named in RTD using the package name, 'unknown', most likely means the RTD docs, if they exist, are not using the GitHub package name 
-            </li>
-            <li>
-              <strong> Updated Daily: </strong>
-              <a target="_blank" href="https://github-metrics-stsci-edu-prod.s3.amazonaws.com/timeseries/github-metrics.csv"> download timeseries CSV </a>
+              <router-link active-class="is-active" to="/downloads"> Download List </router-link> 
             </li>
           </ul>
-        </header>
-        <CSVTable/>
-        <footer>
-          footer
-        </footer>
+          <!-- <p class="menu-label">
+            Administration
+          </p>
+          <ul class="menu-list">
+            <li><a>Team Settings</a></li>
+            <li>
+              <a class="is-active">Manage Your Team</a>
+              <ul>
+                <li><a>Members</a></li>
+                <li><a>Plugins</a></li>
+                <li><a>Add a member</a></li>
+              </ul>
+            </li>
+            <li><a>Invitations</a></li>
+            <li><a>Cloud Storage Environment Settings</a></li>
+            <li><a>Authentication</a></li>
+          </ul>
+          <p class="menu-label">
+            Transactions
+          </p>
+          <ul class="menu-list">
+            <li><a>Payments</a></li>
+            <li><a>Transfers</a></li>
+            <li><a>Balance</a></li>
+          </ul> -->
+        </aside>
+      </div>
+      <div class="column is-three-quarters">
+        <router-view/>
+      </div>
     </div>
-  </div>
-  </div>
+  </section>
+</div>
 </template>
 
 <script>
-import CSVTable from './CSVTable'
+// import CSVTable from './CSVTable'
 
 export default {
   components: {
-    CSVTable
+    // CSVTable
   }
 }
 </script>

@@ -1,10 +1,11 @@
 import axios from 'axios';
 
 const client = axios.create({
-    // 'baseURL': 'http://localhost:8000'
+    baseURL: 'https://github-metrics-stsci-edu-prod.s3.amazonaws.com',
     withCredentials: false,
     headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
     }
 });
 

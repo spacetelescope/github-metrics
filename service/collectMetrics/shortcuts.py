@@ -1,4 +1,6 @@
 import boto3
+import hashlib
+import logging
 import json
 import os
 import requests
@@ -7,7 +9,7 @@ import typing
 
 from bert import constants
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from requests.auth import HTTPBasicAuth
 
@@ -15,12 +17,17 @@ from urllib.parse import urlencode
 
 BASE_URL: str = 'https://api.github.com'
 HEADERS = {
-    'User-Agent': 'repostats-tool',
+    'User-Agent': 'https://www.stsci.edu/~DATB/index.html',
     'Accept': 'application/vnd.github.v3+json'
 }
 OUTPUTS_PATH: str = os.path.join('/tmp', 'github-metrics', 'outputs')
 CACHE_KEY: str = 'cache'
+CACHE_DIR = '/tmp/github-metrics-cache-dir'
 ASCII_DATE_FORMAT: str = '%Y-%m-%d'
+ENCODING = 'utf-8'
+COMMIT_DATE_FORMAT: str = '%Y-%m-%dT%H:%M:%SZ'
+
+logger = logging.getLogger(__name__)
 
 def mine_repo_attribute(org_name: str, repo_name: str, attribute: str, params: typing.Dict[str, str], config: typing.Any) -> typing.Dict[str, typing.Any]:
     logger = config['logger']
@@ -172,4 +179,108 @@ def obtain_s3_datum(filename: str) -> typing.Dict[str, typing.Any]:
 
     with open(filepath, 'rb') as stream:
         return json.loads(stream.read().decode(constants.ENCODING))
+
+
+def load_cache(datum_key: str) -> typing.Dict[str, typing.Any]:
+    filekey: str = hashlib.sha256(datum_key.encode(ENCODING)).hexdigest()
+    filepath = os.path.join(CACHE_DIR, filekey)
+    if os.path.exists(filepath):
+        with open(filepath, 'r') as stream:
+            return json.loads(stream.read())
+
+def stow_cache(datum_key: str, value: typing.Dict[str, typing.Any]) -> None:
+    filekey: str = hashlib.sha256(datum_key.encode(ENCODING)).hexdigest()
+    if not os.path.exists(CACHE_DIR):
+        os.makedirs(CACHE_DIR)
+
+    filepath = os.path.join(CACHE_DIR, filekey)
+    with open(filepath, 'w') as stream:
+        stream.write(json.dumps(value, indent=2))
+
+def badge_locations(org_name: str, package_name: str, branch_name: str = 'master', version: str = 'latest') -> typing.Dict[str, typing.Any]:
+    datum_key = f'{ org_name }-{ package_name }-{ branch_name }-badge_locations'
+
+    cached = load_cache(datum_key)
+    if cached:
+        return cached
+
+    # travis, appveyor, coveralls, rtd, pypi, conda
+    badges = {
+        'travis': {
+            'src': f'https://api.travis-ci.org/{ org_name }/{ package_name }.svg?branch={ branch_name }',
+            'anchor': f'https://travis-ci.org/{ org_name }/{ package_name }',
+        },
+        'appveyor': {
+            'src': f'https://img.shields.io/appveyor/build/{ org_name }/{ package_name }/{ branch_name }.svg',
+            'anchor': f'https://ci.appveyor.com/project/{ org_name }/{ package_name }?branch={ branch_name }',
+        },
+        'codecov': {
+            'src': f'https://codecov.io/gh/{ org_name }/{ package_name }/branch/{ branch_name }/graph/badge.svg',
+            'anchor': f'https://codecov.io/gh/{ org_name }/{ package_name }?branch={ branch_name }',
+        },
+        'rtd': {
+            'src': f'https://readthedocs.org/projects/{ package_name }/badge/?version=latest', 
+            'anchor': f'https://{ package_name }.readthedocs.io/en/{ version }/',
+        },
+        'pypi': {
+            'src': f'https://img.shields.io/pypi/v/{ package_name }.svg',
+            'anchor': f'https://pypi.org/project/{ package_name }',
+        },
+        'conda': {
+            'anchor': f'https://anaconda.org/{ org_name }/{ package_name }',
+            'src': f'https://anaconda.org/{ org_name }/{ package_name }/badges/version.svg',
+        }
+    }
+
+    available = {}
+    for name, links in badges.items():
+        logger.info(f'Heading Links: {links}')
+        image_response = requests.get(links['src'], headers=HEADERS)
+        if image_response.status_code != 200:
+            continue
+
+        elif name == 'appveyor' and 'project not found or access denied' in image_response.content.decode(ENCODING):
+            continue
+
+        elif name == 'codecov' and 'unknown' in image_response.content.decode(ENCODING):
+            continue
+
+        elif name == 'pypi' and 'package or version not found' in image_response.content.decode(ENCODING):
+            continue
+
+        anchor_response = requests.head(links['anchor'], headers=HEADERS)
+        available[name] = links.copy()
+
+    available = {key: available[key] for key in sorted(available.keys())}
+    stow_cache(datum_key, available)
+    return available
+
+def last_week_entries(full_dataset: typing.List[typing.Dict[str, typing.Any]]) -> None:
+    last_week_entries = []
+    start_date = datetime.now() - timedelta(days=8)
+    end_date = datetime.now()
+    for entry in full_dataset:
+        index_value = datetime.strptime(entry['date_weekly'], COMMIT_DATE_FORMAT)
+        if index_value < start_date:
+            continue
+
+        if index_value > end_date:
+            continue
+
+        last_week_entries.append(entry)
+
+    entries = {}
+    for entry in last_week_entries:
+        name = entry['package_name']
+        if not name in entries.keys():
+            entries[name] = entry
+            continue
+          
+        found_datetime = datetime.strptime(entries[name]['date_weekly'], COMMIT_DATE_FORMAT)
+        new_datetime = datetime.strptime(entry['date_weekly'], COMMIT_DATE_FORMAT)
+        if new_datetime < found_datetime:
+            entries[name] = entry
+            continue
+
+    return [e for e in entries.values()]
 

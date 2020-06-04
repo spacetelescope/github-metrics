@@ -193,6 +193,7 @@ def process_s3_bucket_contents():
     from datetime import datetime, timedelta
 
     COMMIT_DATE_FORMAT: str = '%Y-%m-%dT%H:%M:%SZ'
+    CACHE_DIR = '/tmp/github-metrics-cache'
 
     work_queue, done_queue, ologger = utils.comm_binders(process_s3_bucket_contents)
     outputs_dir: str = os.path.join('/tmp', 'outputs', 'process-contents')
@@ -295,9 +296,11 @@ def process_s3_bucket_contents():
                     author_url: str = f'https://github.com/{author_login}'
 
             try:
-                last_commit: str = data['commits'][0]['commit']['author']['date']
+                last_commit_date: str = data['commits'][0]['commit']['author']['date']
+                last_commit_hash: str = data['commits'][0]['sha']
             except IndexError:
-                last_commit: str = 'N\A'
+                last_commit_date: str = 'N\A'
+                last_commit_hash = None
 
 
             try:
@@ -329,11 +332,25 @@ def process_s3_bucket_contents():
                 'pulse_monthly': f'https://github.com/{data["base"]["owner"]["login"]}/{data["base"]["name"]}/pulse/monthly',
                 'pulse_weekly': f'https://github.com/{data["base"]["owner"]["login"]}/{data["base"]["name"]}/pulse/monthly',
                 'descrip': descrip,
+                'description': data['base']['description'],
                 'date': date,
                 'author': author_name,
                 'author_login': author_login,
                 'author_url': author_url,
-                'last_commit': last_commit,
+                'last_commit': last_commit_date,
+                'last_commit_date': last_commit_date,
+                'last_commit_hash': last_commit_hash,
+                'count_commits': len(data['commits']),
+                'count_issues': len(data['issues']),
+                'count_pull_requests': len(data['pull_requests']),
+                'count_contributors': len(data['contributors']),
+                'count_contents': len(data['contents']),
+                'count_tags': len(data['tags']),
+                'count_forks': data['base']['forks'],
+                'count_watchers': data['base']['subscribers_count'],
+                'count_stars': data['base']['stargazers_count'],
+                'count_open_issues': data['base']['open_issues'],
+                'is_private': data['base']['private'],
                 'top_contributor': top_contributor,
                 'top_contributor_contributations': top_contributor_contributations,
                 'total_contributors': len(data['contributors']),
@@ -350,7 +367,15 @@ def process_s3_bucket_contents():
                 'pull_requests_open_url': f'https://github.com/{data["base"]["owner"]["login"]}/{data["base"]["name"]}/pulls?q=is%3Apr+is%3Aopen',
                 'pull_requests_closed': len([pr for pr in data['pull_requests'] if pr['state'] == 'closed']),
                 'pull_requests_closed_url': f'https://github.com/{data["base"]["owner"]["login"]}/{data["base"]["name"]}/pulls?q=is%3Apr+is%3Aclosed',
+                'badges': [],
             }
+            for badge_name, links in shortcuts.badge_locations(data['base']['owner']['login'], data['base']['name']).items():
+                dataset_template['badges'].append({
+                    'name': badge_name,
+                    'src': links['src'],
+                    'anchor': links['anchor']
+                })
+
             dataset_template['key'] = hashlib.md5(json.dumps(dataset_template).encode('utf-8')).hexdigest()
             # Find latest commits, issues, and pulls
             now: datetime = datetime.utcnow()
@@ -512,10 +537,10 @@ def process_s3_bucket_contents():
                 dataset = copy.deepcopy(dataset_template)
                 dataset['pull_requests_opened_weekly'] = fitted_pull_requests_opened
                 dataset['pull_requests_closed_weekly'] = fitted_pull_requests_closed
-                dataset['avg_issue_time_weekly'] = fitted_issues_avg_open
                 dataset['avg_pr_time_weekly'] = fitted_pull_requests_avg_open
                 dataset['issues_opened_weekly'] = fitted_issues_opened
                 dataset['issues_closed_weekly'] = fitted_issues_closed
+                dataset['avg_issue_time_weekly'] = fitted_issues_avg_open
                 dataset['date_weekly'] = previous_commit_boundry.strftime(COMMIT_DATE_FORMAT)
                 dataset['commits_weekly'] = len(fitted_commit)
                 done_queue.put({
@@ -529,6 +554,7 @@ def finalize_contents():
     import csv
     import json
     import os
+    import tempfile
     import typing
 
     from collectMetrics import shortcuts
@@ -562,6 +588,16 @@ def finalize_contents():
 
     ologger.info(f'Uploading file[{timeseries_filepath}] to s3 bucket[{os.environ["DATASET_BUCKET"]}] key[{timeseries_s3_key}]')
     s3_client.upload_file(timeseries_filepath, os.environ['DATASET_BUCKET'], timeseries_s3_key, ExtraArgs={'ACL': 'public-read'})
+
+    last_week_entries_filepath = tempfile.NamedTemporaryFile().name
+    last_week_entries_s3_key = 'timeseries/last-week-entries.json'
+    ologger.info(f'Writing Last Week Entries to file[{last_week_entries_filepath}]')
+    last_week_entries = shortcuts.last_week_entries(latest_dataset)
+    with open(last_week_entries_filepath, 'w') as stream:
+        stream.write(json.dumps(last_week_entries))
+
+    ologger.info(f'Uploading Last Week Entries to S3Key[{last_week_entries_s3_key}]')
+    s3_client.upload_file(last_week_entries_filepath, os.environ['DATASET_BUCKET'], last_week_entries_s3_key, ExtraArgs={'ACL': 'public-read'})
 
     latest_index_filename: str = 'latest.json'
     latest_index_filepath: str = os.path.join(outputs_dir, latest_index_filename)

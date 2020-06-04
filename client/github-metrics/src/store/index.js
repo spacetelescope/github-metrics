@@ -8,7 +8,13 @@ Vue.use(Vuex);
 
 export default new Vuex.Store({
     state: {
-        repos: []
+        repos: [],
+        repo_list: {},
+        filteredRows: [],
+        filteredRowsQuery: '',
+        lastWeekRepos: [],
+        filteredLastWeekRepos: [],
+        filteredLastWeekReposMap: {}
     },
     mutations,
     actions
