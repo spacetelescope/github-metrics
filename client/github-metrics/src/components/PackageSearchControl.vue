@@ -1,7 +1,7 @@
 <template>
     <div class="content">
         <h1 class="header has-text-left"> Search by Package Name </h1>
-        <div class="control">
+        <div class="control" data-v-tour="0">
             <input class="input is-rounded" v-model="query" type="text" placeholder="hstcal">
         </div>
     </div>

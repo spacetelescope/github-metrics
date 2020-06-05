@@ -4,7 +4,8 @@ import Dashboard from '../views/Dashboard.vue';
 import RepoList from '../views/RepoList.vue';
 import Builds from '../views/Builds.vue';
 import Repo from '../views/Repo';
-import Downloads from '../views/Downloads.vue'
+import Downloads from '../views/Downloads.vue';
+import MetricsCollected from '../views/MetricsCollected.vue';
 
 Vue.use(VueRouter);
 
@@ -37,6 +38,11 @@ const routes = [
     path: '/downloads',
     name: 'Downloads',
     component: Downloads
+  },
+  {
+    path: '/metrics-collected',
+    name: 'Metrics Collected',
+    component: MetricsCollected
   }
 ];
 

@@ -25,19 +25,19 @@ export default {
           label: 'Github Downloads',
           borderWidth: 1,
           data: [],
-          backgroundColor: 'rgba(255, 99, 132, 0.2)'
+          backgroundColor: 'rgba(255, 99, 132, 0.4)'
         };
         const astroconda = {
           label: 'Astroconda Channel',
           borderWidth: 1,
           data: [],
-          backgroundColor: 'rgba(54, 162, 235, 0.2)'
+          backgroundColor: 'rgba(54, 162, 235, 0.4)'
         };
         const astrocondaEtc = {
           label: 'Astroconda ETC Channel',
           borderWidth: 1,
           data: [],
-          backgroundColor: 'rgba(255, 159, 64, 0.2)'
+          backgroundColor: 'rgba(255, 159, 64, 0.4)'
         };
         let idx = 0;
         for (idx; idx < this.filteredRows.length; idx++) {
@@ -61,7 +61,7 @@ export default {
       responsive: true,
       type: 'horizontalBar',
       legend: {
-        position: 'right',
+        position: 'top',
       },
       title: {
         display: true,

@@ -13,7 +13,7 @@ export default {
       },
       title: {
         display: true,
-        text: 'Chart.js Bar Chart'
+        text: `${this.row.package_name} Stats`
       },
       tooltips: {
         enabled: false,
@@ -52,9 +52,8 @@ export default {
       ],
       datasets: [{
         label: this.row.package_name,
-        // backgroundColor: color(window.chartColors.red).alpha(0.5).rgbString(),
-        // borderColor: window.chartColors.red,
         borderWidth: 1,
+        backgroundColor: 'rgba(255, 99, 132, 0.4)',
         data: [
           this.row.count_commits,
           this.row.count_issues,

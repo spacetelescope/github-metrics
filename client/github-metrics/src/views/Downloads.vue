@@ -1,10 +1,21 @@
 <template>
   <div class="container">
     <section>
-        <PackageSearchControl/>
+      <PackageSearchControl/>
+      <article class="message is-link">
+        <div class="message-header">
+          <p> Datasource not connected </p>
+        </div>
+        <div class="message-body">
+          The data that which fills this chart is randomly generated. Real Data will be installed sometime in the next couple of weeks
+        </div>
+      </article>
     </section>
     <section>
       <div class="download-container">
+        <p class="subtitle">
+          Data displayed here is gathered from Github, Astroconda Channel, and Astroconda ETC Channel. Logs are parsed and the count of downloads tallied and displayed
+        </p>
         <DownloadStats />
       </div>
     </section>

@@ -22,8 +22,10 @@
     "ramda": "^0.26.1",
     "vue": "^2.6.11",
     "vue-chartjs": "^3.5.0",
+    "vue-cookies": "^1.7.0",
     "vue-moment": "^4.1.0",
     "vue-router": "^3.3.2",
+    "vue-tour": "^1.4.0",
     "vuex": "^3.4.0"
   },
   "devDependencies": {

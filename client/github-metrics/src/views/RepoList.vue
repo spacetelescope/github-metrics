@@ -123,8 +123,8 @@ export default {
         return {
           lastCommit (row) {
             return {
-              'date': new Date(row.last_commit),
-              'url': `${row.repo_url}commit/3d359c624e0e41340e7ffecb9cef5f9e6573ee95`
+              'date': new Date(row.last_commit_date),
+              'url': `${row.repo_url}commit/${row.last_commit_hash}`
             }
           },
           lastWeekStats (row) {
