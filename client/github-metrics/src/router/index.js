@@ -25,7 +25,7 @@ const routes = [
     component: RepoList
   },
   {
-    path: '/repo-list/:pkgName',
+    path: '/repo-list/:owner/:pkgName',
     name: 'Repo',
     component: Repo
   },
@@ -47,7 +47,8 @@ const routes = [
 ];
 
 const router = new VueRouter({
-  mode: 'history',
+  // mode: 'history',
+  mode: 'hash',
   base: process.env.BASE_URL,
   routes,
 });

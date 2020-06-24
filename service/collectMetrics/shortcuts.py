@@ -255,12 +255,99 @@ def badge_locations(org_name: str, package_name: str, branch_name: str = 'master
     stow_cache(datum_key, available)
     return available
 
+def find_earliest_date(dataset_template: typing.Dict[str, typing.Any]) -> str:
+    earliest_date = None
+    for key in [
+        'pull_requests_earliest_activity',
+        'issues_earliest_activity',
+        'commit_earliest_activity']:
+        if dataset_template[key] is None:
+            continue
+
+        date = datetime.strptime(dataset_template[key], COMMIT_DATE_FORMAT)
+        if earliest_date is None or \
+            date < earliest_date:
+            earliest_date = date
+
+    return earliest_date.strftime(COMMIT_DATE_FORMAT)
+
+def find_latest_date(dataset_template: typing.Dict[str, typing.Any]) -> str:
+    latest_date = None
+    for key in [
+        'pull_requests_latest_activity',
+        'issue_latest_activity',
+        'commit_latest_activity']:
+        if dataset_template[key] is None:
+            continue
+
+        date = datetime.strptime(dataset_template[key], COMMIT_DATE_FORMAT)
+        if latest_date is None or \
+            date > latest_date:
+            latest_date = date
+
+    return latest_date.strftime(COMMIT_DATE_FORMAT)
+
+def find_last_week_stats(full_dataset: typing.List[typing.Dict[str, typing.Any]]) -> None:
+    stats = {}
+    windows = []
+    window_length = 8
+    for idx in range(1, 8):
+        start = datetime.now() - timedelta(days=window_length * idx)
+        if idx == 1:
+            end = datetime.now()
+
+        else:
+            end = datetime.now() - timedelta(days=window_length * (idx - 1))
+
+        windows.append([start, end])
+
+    display_map = [
+                    ('issues_opened', 'issues_opened_weekly'),
+                    ('issues_closed', 'issues_closed_weekly'),
+                    ('pull_requests_opened', 'pull_requests_opened_weekly'),
+                    ('pull_requests_closed', 'pull_requests_closed_weekly'),
+                    ('commits', 'commits_weekly')]
+    display_keys = [key_set[0] for key_set in display_map]
+
+    windowed_stats = []
+    for start, end in windows:
+        stats = {}
+        for entry in full_dataset:
+            entry_start = datetime.strptime(entry['window_start'], COMMIT_DATE_FORMAT)
+            name = f'{entry["owner"]}-{entry["package_name"]}' 
+            pkg_stats = stats.get(name, {
+                'owner': entry['owner'],
+                'package_name': entry['package_name']
+            })
+            if entry_start > start and entry_start < end:
+                for key, remote_key in display_map:
+                    pkg_stats[key] = pkg_stats.get(key, 0) + entry[remote_key]
+            else:
+                for key, remote_key in display_map:
+                    pkg_stats[key] = 0
+
+            stats[name] = pkg_stats
+
+        windowed_stats.append([start, end, stats])
+
+    datums = {}
+    for start, end, grouped_stats in windowed_stats:
+        for name, stats in grouped_stats.items():
+            datum = datums.get(name, [])
+            stats['start'] = start.strftime(COMMIT_DATE_FORMAT)
+            stats['end'] = end.strftime(COMMIT_DATE_FORMAT)
+            datum.append(stats)
+            datums[name] = datum
+
+    for name, stats in datums.items():
+        yield stats[0]['owner'], stats[0]['package_name'], stats
+
 def last_week_entries(full_dataset: typing.List[typing.Dict[str, typing.Any]]) -> None:
     last_week_entries = []
     start_date = datetime.now() - timedelta(days=8)
     end_date = datetime.now()
     for entry in full_dataset:
-        index_value = datetime.strptime(entry['date_weekly'], COMMIT_DATE_FORMAT)
+        index_value = datetime.strptime(entry['commit_date_weekly'], COMMIT_DATE_FORMAT)
         if index_value < start_date:
             continue
 
@@ -276,8 +363,8 @@ def last_week_entries(full_dataset: typing.List[typing.Dict[str, typing.Any]]) -
             entries[name] = entry
             continue
           
-        found_datetime = datetime.strptime(entries[name]['date_weekly'], COMMIT_DATE_FORMAT)
-        new_datetime = datetime.strptime(entry['date_weekly'], COMMIT_DATE_FORMAT)
+        found_datetime = datetime.strptime(entries[name]['commit_date_weekly'], COMMIT_DATE_FORMAT)
+        new_datetime = datetime.strptime(entry['commit_date_weekly'], COMMIT_DATE_FORMAT)
         if new_datetime < found_datetime:
             entries[name] = entry
             continue

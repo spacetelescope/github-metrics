@@ -14,7 +14,10 @@ export default new Vuex.Store({
         filteredRowsQuery: '',
         lastWeekRepos: [],
         filteredLastWeekRepos: [],
-        filteredLastWeekReposMap: {}
+        filteredLastWeekReposMap: {},
+        stats: {},
+        lastWeekStats: {},
+        repoData: {},
     },
     mutations,
     actions

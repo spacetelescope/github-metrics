@@ -7,7 +7,7 @@ def collect_github_metrics():
 
     repo_urls_filepath: str = os.path.join(os.getcwd(), 'repo-urls.txt')
     with open(repo_urls_filepath, 'r') as stream:
-        for repo_url in stream.read().split('\n'):
+        for idx, repo_url in enumerate(stream.read().split('\n')):
             if repo_url == '':
                 continue
 
@@ -17,6 +17,9 @@ def collect_github_metrics():
                 'org_name': org_name,
                 'repo_name': repo_name
             })
+            if idx > 10 and constants.DEBUG:
+                break
+
 
 @binding.follow(collect_github_metrics)
 def mine_github_repo():
@@ -185,12 +188,15 @@ def process_s3_bucket_contents():
     import json
     import lzma
     import os
+    import sync_utils
     import typing
 
     from botocore.exceptions import ClientError
     from collectMetrics import shortcuts
 
     from datetime import datetime, timedelta
+
+    from urllib.parse import urlparse
 
     COMMIT_DATE_FORMAT: str = '%Y-%m-%dT%H:%M:%SZ'
     CACHE_DIR = '/tmp/github-metrics-cache'
@@ -204,6 +210,26 @@ def process_s3_bucket_contents():
 
     filepaths: typing.List[typing.Any] = []
     latest_dataset: typing.Dict[str, typing.Any] = []
+    downloads_dataset = {}
+    for channel, channel_details in sync_utils.download_downloads_dataset().items():
+        for package_name, package_details in channel_details.items():
+            try:
+                home = urlparse(package_details['home']).path.strip('/')
+                package_details['count']
+                package_details['home']
+
+            except KeyError:
+                import pdb; pdb.set_trace()
+                pass
+
+            entry = downloads_dataset.get(home, {
+                'count': package_details['count'],
+                'home': package_details['home'],
+                'packages': []
+            })
+            entry['packages'].append(package_name)
+            downloads_dataset[home] = entry
+
     # Debugging logic
     # ascii_date: str = '2019-11-12'
     # contents = []
@@ -234,10 +260,9 @@ def process_s3_bucket_contents():
         s3_key: str = f'daily/{ascii_date}/{filename}'
         try:
             s3_client.download_file(os.environ['DATASET_BUCKET'], s3_key, filepath)
-        except ClientError:
+        except ClientError as err:
             ologger.error(f'Unable to download key[{s3_key} to file[{filepath}]')
-            import pdb; pdb.set_trace()
-            pass
+            raise err
 
         else:
             with lzma.open(filepath, 'r', format=lzma.FORMAT_XZ) as stream:
@@ -296,12 +321,65 @@ def process_s3_bucket_contents():
                     author_url: str = f'https://github.com/{author_login}'
 
             try:
-                last_commit_date: str = data['commits'][0]['commit']['author']['date']
+                last_commit_date: str = data['commits'][0]['commit']['committer']['date']
                 last_commit_hash: str = data['commits'][0]['sha']
-            except IndexError:
-                last_commit_date: str = 'N\A'
-                last_commit_hash = None
+            except (KeyError, IndexError) as err:
+                try:
+                    last_commit_date: str = data['commits'][0]['commit']['author']['date']
+                    last_commit_hash: str = data['commits'][0]['sha']
+                except (KeyError, IndexError) as err:
+                    last_commit_date = 'N\A'
+                    last_commit_hash = None
 
+            try:
+                earliest_commit_date: str = data['commits'][-1]['commit']['committer']['date']
+                earliest_commit_hash: str = data['commits'][-1]['sha']
+            except (KeyError, IndexError) as err:
+                try:
+                    earliest_commit_date: str = data['commits'][-1]['commit']['author']['date']
+                    earliest_commit_hash: str = data['commits'][-1]['sha']
+                except (KeyError, IndexError) as err:
+                    earliest_commit_date = 'N\A'
+                    earliest_commit_hash = None
+
+            early_issue_activity_date = None
+            last_issue_activity_date = None
+            for issue in data['issues']:
+                date = datetime.strptime(issue['updated_at'], COMMIT_DATE_FORMAT)
+                if last_issue_activity_date is None or \
+                    last_issue_activity_date < date:
+                    last_issue_activity_date = date
+
+                date = datetime.strptime(issue['created_at'], COMMIT_DATE_FORMAT)
+                if early_issue_activity_date is None or \
+                    early_issue_activity_date > date:
+                    early_issue_activity_date = date
+
+            else:
+                if last_issue_activity_date:
+                    last_issue_activity_date = last_issue_activity_date.strftime(COMMIT_DATE_FORMAT)
+
+                if early_issue_activity_date:
+                    early_issue_activity_date = early_issue_activity_date.strftime(COMMIT_DATE_FORMAT)
+   
+            early_pull_request_activity_date = None
+            last_pull_request_activity_date = None
+            for pull_request in data['pull_requests']:
+                date = datetime.strptime(pull_request['updated_at'], COMMIT_DATE_FORMAT)
+                if last_pull_request_activity_date is None or \
+                    last_pull_request_activity_date < date:
+                    last_pull_request_activity_date = date
+
+                if early_pull_request_activity_date is None or \
+                    early_pull_request_activity_date > date:
+                    early_pull_request_activity_date = date
+
+            else:
+                if last_pull_request_activity_date:
+                    last_pull_request_activity_date = last_pull_request_activity_date.strftime(COMMIT_DATE_FORMAT)
+
+                if early_pull_request_activity_date:
+                    early_pull_request_activity_date = early_pull_request_activity_date.strftime(COMMIT_DATE_FORMAT)
 
             try:
                 top_contributor: str = data['contributors'][0]['login']
@@ -318,6 +396,23 @@ def process_s3_bucket_contents():
                 license: str = data['base']['license']['name']
             except (TypeError, KeyError):
                 license: str = 'None'
+
+            try:
+                release_latest = data['releases'][0].get('tag_name', 'Invalid Tag')
+                release_latest_notes = data['releases'][0].get('body', 'Release Notes Missing')
+                release_latest_download_count = data['releases'][0].get('download_count', 0)
+            except IndexError:
+                release_latest = None
+                release_latest_notes = None
+                release_latest_download_count = 0
+
+            try:
+                release_download_count = sum([asset['download_count'] for asset in data['releases'][0]['assets']])
+            except (KeyError, IndexError):
+                release_download_count = 0
+
+            if isinstance(date, datetime):
+                date = date.strftime(COMMIT_DATE_FORMAT)
 
             ologger.info(f'Building Timeseries Data for Org[{data["base"]["owner"]["login"]}]/Repo[{data["base"]["name"]}]')
             dataset_template = {
@@ -350,6 +445,10 @@ def process_s3_bucket_contents():
                 'count_watchers': data['base']['subscribers_count'],
                 'count_stars': data['base']['stargazers_count'],
                 'count_open_issues': data['base']['open_issues'],
+                'count_github_releases': len(data['releases']),
+                'github_release_latest': release_latest,
+                'github_release_latest_notes': release_latest_notes,
+                'github_release_latest_download_count': release_latest_download_count,
                 'is_private': data['base']['private'],
                 'top_contributor': top_contributor,
                 'top_contributor_contributations': top_contributor_contributations,
@@ -363,10 +462,17 @@ def process_s3_bucket_contents():
                 'issues_open_url': f'https://github.com/{data["base"]["owner"]["login"]}/{data["base"]["name"]}/issues?q=is%3Aissue+is%3Aopen',
                 'issues_closed': len([issue for issue in data['issues'] if issue['state'] == 'closed']),
                 'issues_closed_url': f'https://github.com/{data["base"]["owner"]["login"]}/{data["base"]["name"]}/issues?q=is%3Aissue+is%3Aclosed',
+                'issue_latest_activity': last_issue_activity_date,
+                'issues_earliest_activity': early_issue_activity_date,
                 'pull_requests_open': len([pr for pr in data['pull_requests'] if pr['state'] == 'open']),
                 'pull_requests_open_url': f'https://github.com/{data["base"]["owner"]["login"]}/{data["base"]["name"]}/pulls?q=is%3Apr+is%3Aopen',
                 'pull_requests_closed': len([pr for pr in data['pull_requests'] if pr['state'] == 'closed']),
                 'pull_requests_closed_url': f'https://github.com/{data["base"]["owner"]["login"]}/{data["base"]["name"]}/pulls?q=is%3Apr+is%3Aclosed',
+                'pull_requests_latest_activity': last_pull_request_activity_date,
+                'pull_requests_earliest_activity': early_pull_request_activity_date,
+                'commit_earliest_activity': earliest_commit_date,
+                'commit_latest_activity': last_commit_date,
+                'release_download_count': release_download_count,
                 'badges': [],
             }
             for badge_name, links in shortcuts.badge_locations(data['base']['owner']['login'], data['base']['name']).items():
@@ -375,6 +481,9 @@ def process_s3_bucket_contents():
                     'src': links['src'],
                     'anchor': links['anchor']
                 })
+
+            dataset_template['earliest_date'] = shortcuts.find_earliest_date(dataset_template)
+            dataset_template['latest_date'] = shortcuts.find_latest_date(dataset_template)
 
             dataset_template['key'] = hashlib.md5(json.dumps(dataset_template).encode('utf-8')).hexdigest()
             # Find latest commits, issues, and pulls
@@ -442,7 +551,7 @@ def process_s3_bucket_contents():
                         dataset_template['issues_closed_last_month'] += 1
 
 
-            # Building sliding window
+            # Sliding Window
             first_commit_date: datetime = datetime.strptime(data['commits'][-1]['commit']['author']['date'], COMMIT_DATE_FORMAT)
             last_commit_date: datetime = datetime.strptime(data['commits'][0]['commit']['author']['date'], COMMIT_DATE_FORMAT)
             commit_date_step: timedelta = timedelta(days=7)
@@ -535,13 +644,17 @@ def process_s3_bucket_contents():
                         fitted_issues_avg.append(fitted_issues_avg_open / issue_dom)
 
                 dataset = copy.deepcopy(dataset_template)
+                dataset['weekly_start'] = None
+                dataset['weekly_end'] = None
                 dataset['pull_requests_opened_weekly'] = fitted_pull_requests_opened
                 dataset['pull_requests_closed_weekly'] = fitted_pull_requests_closed
                 dataset['avg_pr_time_weekly'] = fitted_pull_requests_avg_open
                 dataset['issues_opened_weekly'] = fitted_issues_opened
                 dataset['issues_closed_weekly'] = fitted_issues_closed
                 dataset['avg_issue_time_weekly'] = fitted_issues_avg_open
-                dataset['date_weekly'] = previous_commit_boundry.strftime(COMMIT_DATE_FORMAT)
+                dataset['commit_date_weekly'] = previous_commit_boundry.strftime(COMMIT_DATE_FORMAT)
+                dataset['window_start'] = previous_commit_boundry.strftime(COMMIT_DATE_FORMAT)
+                dataset['window_stop'] = next_commit_boundry.strftime(COMMIT_DATE_FORMAT)
                 dataset['commits_weekly'] = len(fitted_commit)
                 done_queue.put({
                     'dataset': dataset
@@ -586,9 +699,22 @@ def finalize_contents():
         for entry in latest_dataset:
             writer.writerow(entry)
 
-    ologger.info(f'Uploading file[{timeseries_filepath}] to s3 bucket[{os.environ["DATASET_BUCKET"]}] key[{timeseries_s3_key}]')
-    s3_client.upload_file(timeseries_filepath, os.environ['DATASET_BUCKET'], timeseries_s3_key, ExtraArgs={'ACL': 'public-read'})
+    if constants.DEBUG is False:
+        ologger.info(f'Uploading file[{timeseries_filepath}] to s3 bucket[{os.environ["DATASET_BUCKET"]}] key[{timeseries_s3_key}]')
+        s3_client.upload_file(timeseries_filepath, os.environ['DATASET_BUCKET'], timeseries_s3_key, ExtraArgs={'ACL': 'public-read'})
 
+    # Last Week Stats
+    for owner, package_name, stats in shortcuts.find_last_week_stats(latest_dataset):
+        filepath = tempfile.NamedTemporaryFile().name
+        s3_key = f'timeseries/last-week-stats/{owner}/{package_name}.json'
+        with open(filepath, 'wb') as stream:
+            stream.write(json.dumps(stats).encode(constants.ENCODING))
+
+        if constants.DEBUG is False:
+            ologger.info(f'Uploading Stats for Owner[{owner}] Package[{package_name}]')
+            s3_client.upload_file(filepath, os.environ['DATASET_BUCKET'], s3_key, ExtraArgs={'ACL': 'public-read'})
+
+    # Last Week Entries
     last_week_entries_filepath = tempfile.NamedTemporaryFile().name
     last_week_entries_s3_key = 'timeseries/last-week-entries.json'
     ologger.info(f'Writing Last Week Entries to file[{last_week_entries_filepath}]')
@@ -596,8 +722,10 @@ def finalize_contents():
     with open(last_week_entries_filepath, 'w') as stream:
         stream.write(json.dumps(last_week_entries))
 
-    ologger.info(f'Uploading Last Week Entries to S3Key[{last_week_entries_s3_key}]')
-    s3_client.upload_file(last_week_entries_filepath, os.environ['DATASET_BUCKET'], last_week_entries_s3_key, ExtraArgs={'ACL': 'public-read'})
+    if constants.DEBUG is False:
+        ologger.info(f'Uploading Last Week Entries to S3Key[{last_week_entries_s3_key}]')
+        s3_client.upload_file(last_week_entries_filepath, os.environ['DATASET_BUCKET'], last_week_entries_s3_key, ExtraArgs={'ACL': 'public-read'})
+
 
     latest_index_filename: str = 'latest.json'
     latest_index_filepath: str = os.path.join(outputs_dir, latest_index_filename)
@@ -612,7 +740,6 @@ def finalize_contents():
             del entry['pull_requests_closed_weekly']
             del entry['issues_opened_weekly']
             del entry['issues_closed_weekly']
-            del entry['date_weekly']
             del entry['commits_weekly']
 
             unique_dataset.append(entry)
@@ -621,8 +748,9 @@ def finalize_contents():
     with open(latest_index_filepath, 'w') as stream:
         stream.write(json.dumps(unique_dataset))
 
-    ologger.info(f'Uploading file[{latest_index_filepath}] to s3 bucket[{os.environ["DATASET_BUCKET"]}] key[{latest_index_s3_key}]')
-    s3_client.upload_file(latest_index_filepath, os.environ['DATASET_BUCKET'], latest_index_s3_key, ExtraArgs={'ACL':'public-read'})
+    if constants.DEBUG is False:
+        ologger.info(f'Uploading file[{latest_index_filepath}] to s3 bucket[{os.environ["DATASET_BUCKET"]}] key[{latest_index_s3_key}]')
+        s3_client.upload_file(latest_index_filepath, os.environ['DATASET_BUCKET'], latest_index_s3_key, ExtraArgs={'ACL':'public-read'})
 
 
 

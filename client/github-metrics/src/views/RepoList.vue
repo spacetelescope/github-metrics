@@ -9,7 +9,7 @@
           <div class="hero-body">
             <div class="container">
               <h1 class="title has-text-left">
-                <router-link class="repo-router-link" :to="{name: 'Repo', params: {pkgName: row.package_name}}">
+                <router-link class="repo-router-link" :to="{name: 'Repo', params: {owner: row.owner, pkgName: row.package_name}}">
                   {{ row.package_name }}
                 </router-link>
               </h1>

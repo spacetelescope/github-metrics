@@ -16,3 +16,4 @@ node_modules
 dist
 bert-etl.yaml
 .DS_Store
+logs
