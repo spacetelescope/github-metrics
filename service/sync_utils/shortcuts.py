@@ -13,6 +13,8 @@ from datetime import datetime, timedelta
 
 from requests.auth import HTTPBasicAuth
 
+from sync_utils.datatypes import GithubConfig, GithubAttribute
+
 from urllib.parse import urlencode
 
 BASE_URL: str = 'https://api.github.com'
@@ -28,6 +30,9 @@ ENCODING = 'utf-8'
 COMMIT_DATE_FORMAT: str = '%Y-%m-%dT%H:%M:%SZ'
 
 logger = logging.getLogger(__name__)
+
+class Lastest:
+    def __init__(self: PWN, org_name: str, repo_name: str, attribute: GithubAttribute, params: typing.Dict[str, str], config: GithubConfig) -> typing.Dict[str, typing.Any]:
 
 def mine_repo_attribute(org_name: str, repo_name: str, attribute: str, params: typing.Dict[str, str], config: typing.Any) -> typing.Dict[str, typing.Any]:
     logger = config['logger']

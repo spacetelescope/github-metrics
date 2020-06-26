@@ -1,4 +1,5 @@
 import boto3
+import enum
 import logging
 import json
 import os
@@ -37,8 +38,16 @@ def download_dataset(s3_key: str, bucket_name: str, expected_datastructure: typi
 KEYS = {
   'downloads': 'sync-utils/datasets/conda-channel-downloads.json'
 }
+class FStr:
+    def __init__(self, string: str) -> None:
+        self._s = string
+
+    def __repr__(self) -> str:
+        return eval(f"f'{self._s}'")
+
 def upload_downloads_dataset(dataset: typing.Dict[str, typing.Any]) -> None:
     upload_dataset(dataset, KEYS['downloads'], os.environ['DATASET_BUCKET'])
 
 def download_downloads_dataset() -> typing.Dict[str, typing.Any]:
     return download_dataset(KEYS['downloads'], os.environ['DATASET_BUCKET'], dict)
+
