@@ -46,28 +46,65 @@ def _load_channel_data(channel: str) -> typing.Dict[str, typing.Any]:
         subdir_details[subdir] = subdir_response.json()
 
     for package_name, reference in response.json()['packages'].items():
-        for subdir in reference['subdirs']:
-            for subdir_pkg_name, subdir_pkg_details in subdir_details[subdir]['packages'].items():
-                package_details[subdir_pkg_name] = package_details.get(subdir_pkg_name, {})
-                home = reference.get('home', None) or \
-                        reference.get('source_git_url', None) or \
-                        reference.get('source_url', None) or \
-                        reference.get('dev_url', None)
+        home = reference.get('home', None) or \
+                reference.get('source_git_url', None) or \
+                reference.get('dev_url', None)
 
-                package_details[subdir_pkg_name][subdir] = {
-                    'repo_home': home,
-                    'repo_git_url': reference.get('source_git_url', None),
-                    'repo_dev_url': reference.get('dev_url', None),
-                    'package_name': package_name,
-                    'version': subdir_pkg_details['version'],
-                    'version_latest': reference['version'],
-                    'sha256': subdir_pkg_details['sha256'],
-                    'md5': subdir_pkg_details['md5'],
-                    'size': subdir_pkg_details['size'],
-                    'timestamp': reference.get('timestamp', None),
-                }
+        source_url = reference.get('source_url', None)
+        if isinstance(source_url, list):
+            if len(source_url) > 1:
+                import pdb; pdb.set_trace()
+                import sys; sys.exit(1)
 
-    return package_details
+            home = source_url[0]
+        elif isinstance(source_url, str):
+            home = source_url
+
+        package_details[package_name] = {
+            'repo_home': home,
+            'repo_git_url': reference.get('source_git_url', None),
+            'repo_dev_url': reference.get('dev_url', None),
+            'package_name': package_name,
+            'versions': [],
+            'version_latest': reference['version'],
+            'timestamp': reference.get('timestamp', None),
+            'os_support': reference.get('subdirs', []),
+            'releases': [],
+        }
+
+    for subdir in subdir_details.keys():
+        for download_name, download_details in subdir_details[subdir]['packages'].items():
+            details = package_details.get(download_details['name'], {
+                'releases': [],
+            })
+            details['releases'].append({
+                'name': download_name,
+                'sha': download_details['sha256'],
+                'md5': download_details['md5'],
+                'depends': download_details['depends'],
+                'build': download_details['build'],
+                'version': download_details['version'],
+                'size': download_details['size'],
+            })
+            package_details[download_details['name']] = details
+
+    release_data = {}
+    ENCODING = 'utf-8'
+    import hashlib
+    import json
+    def _hash_datum(datum: typing.Dict[str, typing.Any]) -> str:
+        return hashlib.sha256(''.join(sorted(json.dumps(datum))).encode(ENCODING)).hexdigest()
+
+    for package_name, details in package_details.items():
+        for release_name in [rel['name'] for rel in details['releases']]:
+            if release_name in release_data.keys():
+                if _hash_datum(details) != _hash_datum(release_data[release_name]):
+                    import pdb; pdb.set_trace()
+                    import sys; sys.exit(1)
+
+            release_data[release_name] = details.copy()
+
+    return release_data
 
 @binding.follow(load_log_files, pipeline_type=constants.PipelineType.CONCURRENT)
 def parse_log_file():
@@ -201,9 +238,16 @@ def parse_log_file():
                     'osx-64' in result['path']
                 ]) and \
                 result['status_code'] == 200:
+
                 if result['path'].startswith('/astroconda-etc/'):
-                    home = ASTROCONDA_ETC_CHANNEL_DATA[package_name].get('linux-64', {}).get('repo_home', None) or \
-                                ASTROCONDA_ETC_CHANNEL_DATA[package_name].get('osx-64', {}).get('repo_home', None)
+                    home = ASTROCONDA_ETC_CHANNEL_DATA[package_name].get('repo_home', None)
+                    if isinstance(home, list):
+                        import pdb; pdb.set_trace()
+                        pass
+
+                    if home is None:
+                        ologger.info(f'Home not found for Package[{package_name}]')
+                        continue
 
                     entry = ASTROCONDA_ETC_DOWNLOADS.get(package_name, {
                         'count': 0,
@@ -225,9 +269,15 @@ def parse_log_file():
                 #     ASTROCONDA_TOMB_DOWNLOADS[package_name] = entry
 
                 elif result['path'].startswith('/astroconda/'):
-                    home = ASTROCONDA_CHANNEL_DATA[package_name].get('linux-64', {}).get('repo_home', None) or \
-                            ASTROCONDA_CHANNEL_DATA[package_name].get('osx-64', {}).get('repo_home', None) or \
-                            ASTROCONDA_CHANNEL_DATA[package_name].get('win-64', {}).get('repo_home', None)
+                    home = ASTROCONDA_CHANNEL_DATA[package_name].get('repo_home', None)
+
+                    if isinstance(home, list):
+                        import pdb; pdb.set_trace()
+                        pass
+
+                    if home is None:
+                        ologger.info(f'Home not found for Package[{package_name}]')
+                        continue
 
                     entry = ASTROCONDA_DOWNLOADS.get(package_name, {
                         'count': 0,
@@ -255,7 +305,13 @@ def parse_log_file():
                 parse_logfile_stream(stream)
 
     sync_utils.upload_downloads_dataset({
-      'astroconda-etc': ASTROCONDA_ETC_DOWNLOADS,
-      'astroconda': ASTROCONDA_DOWNLOADS
+      'channels': {
+        'astroconda-etc': ASTROCONDA_ETC_DOWNLOADS,
+        'astroconda': ASTROCONDA_DOWNLOADS
+      },
+      'data': {
+        'astroconda-etc': ASTROCONDA_ETC_CHANNEL_DATA,
+        'astroconda': ASTROCONDA_CHANNEL_DATA,
+      }
     })
 

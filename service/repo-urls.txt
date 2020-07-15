@@ -6,7 +6,7 @@ https://github.com/spacetelescope/acstools
 https://github.com/spacetelescope/wss_tools
 https://github.com/spacetelescope/asdf
 https://github.com/spacetelescope/asdf-standard
-https://github.com/spacetelescope/crds-server
+# https://github.com/spacetelescope/crds-server
 https://github.com/spacetelescope/crds
 https://github.com/spacetelescope/drizzlepac
 https://github.com/spacetelescope/stak
